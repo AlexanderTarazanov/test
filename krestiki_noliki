@@ -1,0 +1,83 @@
+def begin(): #приветствие
+    print("-----------")
+    print("Привет!")
+    print("Давай поиграем")
+    print("      в")
+    print("крестики нолики")
+    print("-----------")
+    print("вводим числа а и b через пробел")
+    print("a - номер строки")
+    print("b - номер столбца")
+
+def vyvod_polya():  #функция для вывода поля
+    print(f"  0 1 2")
+    for i in range(3):
+        string = " ".join(pole[i])
+        print(f"{i} {string}")
+
+def zapros():  #функция для запроса ввода данных игроком
+    while True:
+        cell = input("Твой ход:").split()
+
+        if len(cell) !=2:
+            print("Нужно ввести 2 числа через пробел")
+            continue
+
+        a, b = cell
+
+        if not(a.isdigit()) or not(b.isdigit()):
+            print("Нужно ввести числа")
+            continue
+
+        a, b = int(a), int(b)
+
+        if 0 > a or a > 2 or 0 > b or b > 2:
+            print("Неверные значения")
+            continue
+
+        if pole[a][b] != " ":
+            print("Клетка занята")
+            continue
+
+        return a, b
+
+def victory():  #функция для проверки выйгрышных комбинаций
+    victory_row = (((0, 0), (0, 1), (0, 2)), ((1, 0), (1, 1), (1, 2)), ((2, 0), (2, 1), (2, 2)),
+                   ((0, 2), (1, 1), (2, 0)), ((0, 0), (1, 1), (2, 2)), ((0, 0), (1, 0), (2, 0)),
+                   ((0, 1), (1, 1), (2, 1)), ((0, 2), (1, 2), (2, 2)))
+    for cell in victory_row:
+        sign = []
+        for c in cell:
+            sign.append(pole[c[0]][c[1]])
+        if sign == ["X", "X", "X"]:
+            print("Крестики выйграли!")
+            return True
+        if sign == ["0", "0", "0"]:
+            print("Выйграли нолики")
+            return True
+    return False
+
+begin()
+pole = [[" "] * 3 for i in range(3)]  # задаем матрицу 3х3 для создания поля
+step = 0
+while True: #цикл процесса самой игры
+    step +=1
+    vyvod_polya()
+    if step % 2 == 1:
+        print(" Ход за крестиками ")
+    else:
+        print(" Ход за ноликами ")
+
+    a, b = zapros()
+
+    if step % 2 == 1:
+        pole[a][b] = "X"
+    else:
+        pole[a][b] = "0"
+
+    if victory():
+        break
+
+    if step == 9:
+        print("Ничья!")
+        break
