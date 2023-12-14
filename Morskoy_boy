@@ -285,5 +285,5 @@ class Game:
         self.greet()  # приветствие
         self.loop()  # цикл игры
 
-g = Game()
-g.start()
+a = Game()
+a.start()
