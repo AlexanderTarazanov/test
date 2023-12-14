@@ -1,0 +1,289 @@
+from random import randint  # модуль random для генерации случайных чисел
+
+# создаем классы исключений, которые будет использовать программа
+class BoardException(Exception):
+    pass
+
+class BoardOutException(BoardException):
+    def __str__(self):
+        return "Выстрел за перделы игорового поля!"
+
+class BoardUsedException(BoardException):
+    def __str__(self):
+        return "В эту клетку уже произведен выстрел"
+
+class BoardWrongShipException(BoardException):  # исключение для размещения кораблей
+    pass
+
+# создаем класс точек на доске и описываем их параметры (координаты x и y)
+class Dot:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    # метод для проверки точек на равенство
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    # метод representation возвращает более информативное строковое представление объекта
+    # (в нашем случае координаты точек)
+    def __repr__(self):
+        return f"({self.x}, {self.y})"
+
+# создаем класс "Ship" корабль на игровой доске, который имеет следующие параметры:
+# длина - l
+# точка, где размещен нос корабля - bow
+# направление корабля (вертикальное/горизрнтальное) - o
+# Количество жизней (сколько точек корабля еще не подбито) - lives
+class Ship:
+    def __init__(self, bow, l, o):
+        self.bow = bow
+        self.l = l
+        self.o = o
+        self.lives = l
+
+    @property  # используем декоратор property, т. к. метод dots вычисляет свойства кораблей
+    # создаем метод, который возвращает список всех точек корабля
+    def dots(self):
+        ship_dots = []
+        for i in range(self.l):
+            cur_x = self.bow.x
+            cur_y = self.bow.y
+            if self.o == 0:  # горизонтальное расположение корабля
+                cur_x += i
+
+            elif self.o == 1:  # вертикальное расположение корабля
+                cur_y += i
+            ship_dots.append(Dot(cur_x, cur_y))
+        return ship_dots
+
+# создаем класс для игровой доски, которая описывается следующими параметрами:
+# двумерный список, в котором хранятся состояния каждой из клеток
+# список кораблей доски
+# параметр hid типа bool для скрытия кораблей на доске компьютера
+# количесвто живых кораблей на доске
+class Board:
+    def __init__(self, hid=False, size=6):
+        self.size = size  # размер игровой доски
+        self.hid = hid  # количество пораженных кораблей
+        self.count = 0  # количество пораженных кораблей
+        self.field = [["O"] * size for _ in range(size)]  # состояние клеток
+        self.used_dots = []  # использованные точки
+        self.ships = []  # список кораблей
+
+    # создаем метод, который добавляет корабль на доску, иначе выбрасываем исключения
+    def add_ship(self, ship):
+
+        for d in ship.dots:
+            if self.out(d) or d in self.used_dots:
+                raise BoardWrongShipException()
+        for d in ship.dots:
+            self.field[d.x][d.y] = "■"  # ставим квадрат в каждой точке корабля
+            self.used_dots.append(d)  # добавляем точку корабля в список использованных точек
+        self.ships.append(ship)  # список кораблей
+        self.contour(ship)  # обводим корабли по контуру
+
+    # создаем метод, который обводит корабль по контору, а также исключает расстановку кораблей в соседних клетках
+    def contour(self, ship, verb=False):
+        # список точек вокруг конкретной точки (контур точки)
+        near = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1), (0, 0), (0, 1),
+            (1, -1), (1, 0), (1, 1)
+        ]
+        for d in ship.dots:
+            for dx, dy in near:
+                cur = Dot(d.x + dx, d.y + dy)
+                if not (self.out(cur)) and cur not in self.used_dots:
+                    if verb:  # параметр для расстановки точек вокруг кораблей (контур кораблей)
+                        self.field[cur.x][cur.y] = "."
+                    self.used_dots.append(cur)
+
+    def __str__(self):  # игровое поле
+        res = ""
+        res += "  | 1 | 2 | 3 | 4 | 5 | 6 |"
+        for i, row in enumerate(self.field):
+            res += f"\n{i + 1} | " + " | ".join(row) + " |"
+
+        if self.hid:
+            res = res.replace("■", "O")
+        return res
+
+    # создаем метод out, который для точки (класса Dot)
+    # возвращает True, если точка выходит за пределы поля, и False, если не выходит
+    def out(self, d):
+        return not ((0 <= d.x < self.size) and (0 <= d.y < self.size))
+
+    # создаем метод shot, который делает выстрел по доске, который также выбрасывает исключения
+    # при выстреле за пределы доски и в использованную точку
+    def shot(self, d):
+        if self.out(d):
+            raise BoardOutException()  # выбрасываем исключение (выход за границы)
+
+        if d in self.used_dots:
+            raise BoardUsedException()  # выбрасываем исключение (использованная точка)
+
+        self.used_dots.append(d)
+
+        for ship in self.ships:
+            if d in ship.dots:
+                ship.lives -= 1  # уменьшаем количество жизней корабля
+                self.field[d.x][d.y] = "X"  # ставим X в пораженную точку корабля
+                if ship.lives == 0:
+                    self.count += 1  # добавляем корабль к списку пораженных кораблей
+                    self.contour(ship, verb=True)  # контур уничтоженного корабля
+                    print("Корабль уничтожен!")
+                    return False
+                else:
+                    print("Корабль подбит!")
+                    return True
+
+        self.field[d.x][d.y] = "T"  # ставим Т в случае промаха
+        print("Промах!")
+        return False
+
+    def begin(self):
+        self.used_dots = []  # обнуляем список использованных точек, для хранения точек с выстрелами игрока
+
+# внешняя логика игры
+# создаем класс игрока Player - родительский для классов с AI и пользователем
+class Player:
+    def __init__(self, board, enemy):
+        self.board = board  # собственная доска
+        self.enemy = enemy  # доска врага
+
+    # создаем метод, который "спрашивает" игрока в какую клетку он делает выстрел
+    def ask(self):
+        raise NotImplementedError()
+
+    # создаем метод, который деалет ход в игре
+    def move(self):
+        while True:
+            try:
+                target = self.ask()  # запрашиваем координаты выстрела
+                repeat = self.enemy.shot(target)  # выполняем выстрел
+                return repeat  # повторяем ход в случае попадания
+            except BoardException as e:  # выбрасываем исключение
+                print(e)
+
+# класс компьютера
+class AI(Player):
+    def ask(self):
+        d = Dot(randint(0, 5), randint(0, 5))  # выбор случайной точки
+        print(f"Ход компьютера: {d.x + 1} {d.y + 1}")
+        return d
+
+# класс пользователя
+class User(Player):
+    def ask(self):
+        while True:
+            cords = input("Ваш ход: ").split()
+
+            if len(cords) != 2:
+                print(" Введите 2 координаты! ")  # запрашиваем координаты
+                continue
+
+            x, y = cords
+
+            if not (x.isdigit()) or not (y.isdigit()):  # проверяем правильность ввода координат
+                print(" Введите числа! ")
+                continue
+
+            x, y = int(x), int(y)
+
+            return Dot(x - 1, y - 1)  # вычитаем 1, т. к. программа ведет отсчет от 0
+
+# создаем класс игры с параметрами:
+# игрок - ползователь, объект класса User
+# доска пользователя
+# игрок - компьютер, объект класса AI
+# доска компьютера
+class Game:
+    def __init__(self, size=6):  # конструктор игры
+        self.size = size
+        pl = self.random_board()  # случайная доска для пользователя
+        co = self.random_board()  # случайная доска для компьютера
+        co.hid = True  # скрываем корабли компьютера
+
+        # создаем игроков
+        self.ai = AI(co, pl)
+        self.us = User(pl, co)
+
+    # создаем метод для генерации случайной доски
+    def random_board(self):
+        board = None
+        while board is None:
+            board = self.random_cell()
+        return board
+
+    # размещаем корабли случайным образом
+    def random_cell(self):
+        lenghts = [3, 2, 2, 1, 1, 1, 1]  # задаем длину кораблей
+        board = Board(size=self.size)
+        attempts = 0  # счетчик попыток расстановки кораблей
+        for l in lenghts:
+            while True:
+                attempts += 1
+                if attempts > 3000:  # ограничиваем количество попыток
+                    return None  # возвращаем пустую доску при превышении 3000 попыток
+                ship = Ship(Dot(randint(0, self.size), randint(0, self.size)), l, randint(0, 1))
+                try:
+                    board.add_ship(ship)
+                    break
+                except BoardWrongShipException:  # выбрасываем исключение при неверной расстановке кораблей
+                    pass
+        # подготовка доски к игре
+        board.begin()
+        return board
+
+    def greet(self):  # приветствие
+        print("-------------------")
+        print("-------------------")
+        print("Привет! Начинаем")
+        print("       игру     ")
+        print("   морской бой  ")
+        print("-------------------")
+        print("-------------------")
+        print("Вводим: x y через пробел")
+        print(" x - номер строки  ")
+        print(" y - номер столбца ")
+
+    # создаем метод с игровым циклом
+    def loop(self):
+        step = 0
+        while True:
+            print("-" * 15)
+            print("Доска пользователя:")
+            print(self.us.board)
+            print("-" * 15)
+            print("Доска компьютера:")
+            print(self.ai.board)
+            if step % 2 == 0:  # если номер хода четный - ходит пользователь, иначе - ходит компьютер
+                print("-" * 15)
+                print("Ходит пользователь!")
+                repeat = self.us.move()  # повторяем ход при попадании пользователя
+            else:
+                print("-" * 15)
+                print("Ходит компьютер!")
+                repeat = self.ai.move()  # повторяем ход при попадании компьютера
+            if repeat:
+                step -= 1  # уменьшаем число ходов на 1, для возможности повтора хода игроком или компьютером
+
+            if self.ai.board.count == len(self.ai.board.ships):
+                print("-" * 15)
+                print("Пользователь выиграл!")
+                break
+
+            if self.us.board.count == len(self.us.board.ships):
+                print("-" * 15)
+                print("Компьютер выиграл!")
+                break
+            step += 1
+
+    # создаем метод start для запуска игры
+    def start(self):
+        self.greet()  # приветствие
+        self.loop()  # цикл игры
+
+g = Game()
+g.start()
