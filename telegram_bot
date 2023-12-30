@@ -1,0 +1,97 @@
+# код файла main.py
+
+# импортируем библиотеки
+import telebot
+import traceback
+# импортируем словарь с валютами и токен бота из файла config.py
+from config import *
+# импортируем классы конвертера и исключений из файла extensions.py
+from extensions import Converter, APIException
+
+bot = telebot.TeleBot(TOKEN)  # создаем объект бота, обращаемся к библиотеке pyTelegramBotAPI
+
+@bot.message_handler(commands=['start', 'help'])  # декоратор для обработки команд start, help
+def start(message: telebot.types.Message):
+    text = "Чтобы начать работу введите команду боту в следующем формате: \n<имя валюты>  \
+<в какую валюту перевести>  \
+<количество переводимой валюты>\nУвидеть список всех доступных валют: /values"
+    bot.send_message(message.chat.id, text)  # отправляем сообщение
+
+@bot.message_handler(commands=['values'])  # декоратор для обработки команды values
+def values(message: telebot.types.Message):
+    text = "Доступные валюты:"
+    for i in currency.keys():  # проходимся по ключам словаря с валютами
+        text = '\n'.join((text, i))  # пишем каждый ключ с новой строки
+    bot.reply_to(message, text)  # отправляем сообщение и помечаем его как ответ
+
+@bot.message_handler(content_types=['text'])
+def converter(message: telebot.types.Message):
+    values = message.text.split()
+    try:
+        if len(values) != 3:
+            raise APIException("Неверное количество параметров!")
+
+        answer = Converter.get_price(*values)
+    except APIException as a:
+        bot.reply_to(message, f"Ошибка в команде:\n{a}")
+    except Exception as a:
+        traceback.print_tb(a.__traceback__)
+        bot.reply_to(message, f"Неизвестная ошибка:\n{a}")
+    else:
+        bot.reply_to(message, answer)
+
+bot.polling()  # метод для общения бота с серверами Telegram
+
+# код файла extensions.py
+
+# импортируем библиотеки
+import requests
+import json
+# импортируем словарь с валютами из файла config.py
+from config import currency
+
+# создаем класс исключений
+class APIException(Exception):
+    pass
+
+# создаем класс конвертера
+class Converter:
+    @staticmethod
+    def get_price(base, quote, amount):  # статический метод, который принимает три аргумента
+        # описываем возможные ошибки
+        try:
+            base_key = currency[base.lower()]
+        except KeyError:
+            raise APIException(f"Валюта {base} не найдена!")
+
+        try:
+            quote_key = currency[quote.lower()]
+        except KeyError:
+            raise APIException(f"Валюта {quote} не найдена!")
+
+        if base_key == quote_key:
+            raise APIException(f"Невозможно перевести одинаковые валюты {base}!")
+
+        try:
+            amount = float(amount.replace(",", "."))
+        except ValueError:
+            raise APIException(f"Не удалось обработать количество {amount}!")
+
+        # отправляем запрос к API
+        r = requests.get(f"https://api.freecurrencyapi.com/v1/latest?apikey="
+        f"fca_live_ElkgKvmgYbY2KNwlI0hEmuiUEymh0GSVQxUiFhg2&currencies={quote_key}&base_currency={base_key}")
+        resp = json.loads(r.content)
+        new_price = resp['data'][quote_key] * float(amount)
+        new_price = round(new_price, 2) # округляем полученное значение
+        message = f"Цена {amount} {base} в {quote} : {new_price}"  # результат конвертации
+        return message
+
+# код файла config.py
+
+# создаем словарь с доступными валютами
+currency = {
+    "доллар": "USD",
+    "евро": "EUR",
+    "рубль": "RUB"
+}
+TOKEN = "6450215276:AAF_zmn_NIasVuD5-eVmZWuMrJhEXptxv7w"  # константа TOKEN для обращения к нашему боту
